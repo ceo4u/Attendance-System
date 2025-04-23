@@ -5,7 +5,7 @@ import { JwtService } from './jwt.service';
 
 @Injectable()
 export class JwtAuthGuard extends AuthGuard('jwt') {
-  constructor(private jwtService: JwtService) {
+  constructor() {
     super();
   }
 
@@ -13,7 +13,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     return super.canActivate(context);
   }
 
-  handleRequest(err, user, info) {
+  handleRequest(err: any, user: any, _info: any) {
     if (err || !user) {
       throw err || new Error('Unauthorized');
     }
@@ -29,11 +29,11 @@ export class WsJwtAuthGuard {
     try {
       const client = context.switchToWs().getClient();
       const authToken = client.handshake.headers.authorization?.split(' ')[1];
-      
+
       if (!authToken) {
         throw new WsException('Unauthorized - No token provided');
       }
-      
+
       const decoded = await this.jwtService.verify(authToken);
       client.user = decoded;
       return true;

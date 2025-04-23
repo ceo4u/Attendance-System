@@ -235,16 +235,33 @@ $ npm run test -- attendance.service
 ```
 ├── src/                    # Source code
 │   ├── attendance/         # Attendance module
+│   │   ├── attendance.controller.ts
+│   │   ├── attendance.gateway.ts
+│   │   ├── attendance.service.ts
+│   │   └── *.spec.ts       # Unit tests
 │   ├── auth/               # Authentication module
+│   │   ├── auth.controller.ts
+│   │   ├── auth.module.ts
+│   │   ├── jwt-auth.guard.ts
+│   │   ├── jwt.service.ts
+│   │   └── jwt.strategy.ts
 │   ├── config/             # Configuration module
 │   ├── dtos/               # Data Transfer Objects
+│   │   ├── attendance.dto.ts
+│   │   └── auth.dto.ts
 │   ├── exceptions/         # Custom exceptions
 │   ├── app.module.ts       # Main application module
 │   └── main.ts             # Application entry point
-├── test/                   # End-to-end tests
-├── test-rest-api.js        # REST API test client
-├── test-ws-client.js       # WebSocket test client
+├── test/                   # Tests
+│   ├── app.e2e-spec.ts     # End-to-end tests
+│   ├── jest-e2e.json       # Jest configuration
+│   ├── test-client.js      # Simple WebSocket client
+│   ├── test-rest-api.js    # REST API test client
+│   ├── test-ws-client.js   # Interactive WebSocket client
+│   └── check-redis.js      # Redis cache utility
 └── logs/                   # Application logs
+    ├── combined.log        # All logs
+    └── error.log           # Error logs only
 ```
 
 ## Deployment

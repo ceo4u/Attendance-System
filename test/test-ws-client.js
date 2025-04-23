@@ -82,7 +82,6 @@ function showMenu(socket, rl) {
         socket.disconnect();
         rl.close();
         process.exit(0);
-        break;
       default:
         console.log('Invalid option');
         showMenu(socket, rl);
