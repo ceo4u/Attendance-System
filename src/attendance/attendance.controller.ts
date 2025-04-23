@@ -1,8 +1,11 @@
-import { Controller, Get, Post, Delete, Body, Query, Param, Logger, HttpException, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Body, Query, Param, Logger, HttpException, HttpStatus, UseGuards, ValidationPipe } from '@nestjs/common';
 import { CacheException } from '../exceptions/cache.exception';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { AttendanceDto, GetAttendanceDto } from '../dtos/attendance.dto';
 import { AttendanceService } from './attendance.service';
 
 @Controller('attendance')
+@UseGuards(JwtAuthGuard)
 export class AttendanceController {
   private readonly logger = new Logger(AttendanceController.name);
   constructor(private readonly attendanceService: AttendanceService) {}
@@ -31,19 +34,15 @@ export class AttendanceController {
 
   @Get('student')
   async getStudentAttendance(
-    @Query('classId') classId: string,
-    @Query('studentId') studentId: string
+    @Query(ValidationPipe) query: GetAttendanceDto
   ) {
     try {
-      this.logger.log(`Getting attendance for class: ${classId}, student: ${studentId}`);
-      if (!classId || !studentId) {
-        throw new HttpException('Class ID and Student ID are required', HttpStatus.BAD_REQUEST);
-      }
-      const result = await this.attendanceService.getAttendanceData(classId, studentId);
-      this.logger.log(`Retrieved attendance data for class: ${classId}, student: ${studentId}`);
+      this.logger.log(`Getting attendance for class: ${query.classId}, student: ${query.studentId}`);
+      const result = await this.attendanceService.getAttendanceData(query.classId, query.studentId);
+      this.logger.log(`Retrieved attendance data for class: ${query.classId}, student: ${query.studentId}`);
       return result;
     } catch (error) {
-      this.logger.error(`Error getting attendance data for class: ${classId}, student: ${studentId}`, error.stack);
+      this.logger.error(`Error getting attendance data for class: ${query.classId}, student: ${query.studentId}`, error.stack);
       if (error instanceof CacheException || error instanceof HttpException) {
         throw error;
       }
@@ -55,14 +54,11 @@ export class AttendanceController {
   }
 
   @Post('mark')
-  async markAttendance(@Body() data: { classId: string; studentId: string; status: string; ttl?: number }) {
+  async markAttendance(@Body(ValidationPipe) data: AttendanceDto) {
     try {
       this.logger.log(`Marking attendance for class: ${data.classId}, student: ${data.studentId}`);
 
-      // Validate input data
-      if (!data.classId || !data.studentId || !data.status) {
-        throw new HttpException('Class ID, Student ID, and status are required', HttpStatus.BAD_REQUEST);
-      }
+      // Data is already validated by ValidationPipe
 
       // Use the service method to set attendance data and get the cache key
       const cacheKey = await this.attendanceService.setAttendanceData(

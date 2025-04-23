@@ -1,43 +1,75 @@
-import { WebSocketGateway, WebSocketServer, SubscribeMessage, MessageBody, ConnectedSocket, OnGatewayConnection, OnGatewayDisconnect, WsException } from '@nestjs/websockets';
+import { WebSocketGateway, WebSocketServer, SubscribeMessage, MessageBody, ConnectedSocket, OnGatewayConnection, OnGatewayDisconnect, OnGatewayInit, WsException } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { OfflineSyncService } from '../offline-sync.service';
 import { AttendanceService } from './attendance.service';
-import { Logger } from '@nestjs/common';
+import { Logger, UseGuards, UsePipes, ValidationPipe } from '@nestjs/common';
 import { CacheException } from '../exceptions/cache.exception';
+import { WsJwtAuthGuard } from '../auth/jwt-auth.guard';
+import { JwtService } from '../auth/jwt.service';
+import { AttendanceDto, SubscribeToClassDto } from '../dtos/attendance.dto';
 
-@WebSocketGateway({ cors: true }) // Enable CORS for testing
-export class AttendanceGateway implements OnGatewayConnection, OnGatewayDisconnect {
+@WebSocketGateway({
+  cors: true,
+  namespace: 'attendance',
+  transports: ['websocket']
+})
+export class AttendanceGateway implements OnGatewayConnection, OnGatewayDisconnect, OnGatewayInit {
   private readonly logger = new Logger(AttendanceGateway.name);
   @WebSocketServer()
   server: Server;
 
   constructor(
     private attendanceService: AttendanceService,
-    private offlineSyncService: OfflineSyncService
+    private offlineSyncService: OfflineSyncService,
+    private jwtService: JwtService
   ) {}
 
+  afterInit(server: Server) {
+    this.logger.log('WebSocket Gateway initialized');
+
+    // Use a middleware to authenticate WebSocket connections
+    server.use(async (socket: Socket, next) => {
+      try {
+        const token = socket.handshake.auth.token ||
+                      socket.handshake.headers.authorization?.split(' ')[1];
+
+        if (!token) {
+          return next(new Error('Authentication error: Token not provided'));
+        }
+
+        const decoded = await this.jwtService.verify(token);
+        socket.data.user = decoded;
+        this.logger.log(`Authenticated WebSocket connection for user: ${decoded.username}`);
+        next();
+      } catch (error) {
+        this.logger.error(`WebSocket authentication error: ${error.message}`);
+        next(new Error('Authentication error: Invalid token'));
+      }
+    });
+  }
 
   @SubscribeMessage('markAttendance')
-  async handleMarkAttendance(@MessageBody() data: any): Promise<void> {
+  @UseGuards(WsJwtAuthGuard)
+  @UsePipes(new ValidationPipe())
+  async handleMarkAttendance(@MessageBody() data: AttendanceDto, @ConnectedSocket() client: Socket): Promise<any> {
     try {
-      const { classId, studentId, status } = data;
+      // Data is already validated by ValidationPipe
 
-      // Validate input data
-      if (!classId || !studentId || !status) {
-        throw new WsException('Class ID, Student ID, and status are required');
-      }
-
-      this.logger.log(`Received attendance data for class: ${classId}, student: ${studentId}`);
+      const user = client.data.user;
+      this.logger.log(`User ${user.username} marking attendance for class: ${data.classId}, student: ${data.studentId}`);
 
       // Use the service method to set attendance data
-      const cacheKey = await this.attendanceService.setAttendanceData(classId, studentId, status);
+      const cacheKey = await this.attendanceService.setAttendanceData(data.classId, data.studentId, data.status, data.ttl);
       this.logger.log(`Attendance data cached with key: ${cacheKey}`);
 
       // Broadcast to class room
-      this.server.to(`class_${classId}`).emit('attendanceUpdate', { studentId, status });
+      this.server.to(`class_${data.classId}`).emit('attendanceUpdate', { studentId: data.studentId, status: data.status });
 
       // Add to offline queue
       this.offlineSyncService.addToQueue(data);
+
+      // Return acknowledgment
+      return { success: true, message: 'Attendance marked successfully', cacheKey };
     } catch (error) {
       this.logger.error(`Error handling mark attendance: ${error.message}`, error.stack);
       if (error instanceof CacheException) {
@@ -48,12 +80,11 @@ export class AttendanceGateway implements OnGatewayConnection, OnGatewayDisconne
   }
 
   @SubscribeMessage('subscribeToClass')
-  handleSubscribe(@MessageBody() data: { classId: string }, @ConnectedSocket() client: Socket): void {
+  @UseGuards(WsJwtAuthGuard)
+  @UsePipes(new ValidationPipe())
+  handleSubscribe(@MessageBody() data: SubscribeToClassDto, @ConnectedSocket() client: Socket): void {
     try {
-      // Validate input data
-      if (!data.classId) {
-        throw new WsException('Class ID is required');
-      }
+      // Data is already validated by ValidationPipe
 
       client.join(`class_${data.classId}`);
       this.logger.log(`Client ${client.id} joined class room: class_${data.classId}`);

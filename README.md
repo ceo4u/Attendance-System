@@ -44,7 +44,9 @@ $ npm run start:dev
 $ npm run start:prod
 ```
 
-## Run tests
+## Testing
+
+### Running Tests
 
 ```bash
 # unit tests
@@ -56,6 +58,62 @@ $ npm run test:e2e
 # test coverage
 $ npm run test:cov
 ```
+
+### Test Files Organization
+
+The project includes various test files organized as follows:
+
+1. **Unit Tests**
+   - Located in the source code directories alongside the files they test
+   - Follow the naming convention `*.spec.ts`
+   - Example: `src/attendance/attendance.service.spec.ts`
+
+2. **End-to-End Tests**
+   - Located in the `test` directory
+   - Example: `test/app.e2e-spec.ts`
+
+3. **Test Clients**
+   - Located in the root directory
+   - `test-rest-api.js` - For testing the REST API endpoints
+   - `test-ws-client.js` - For testing WebSocket connections
+
+### Running Test Clients
+
+To test the REST API:
+```bash
+$ node test-rest-api.js
+```
+
+To test WebSocket connections:
+```bash
+$ node test-ws-client.js
+```
+
+## Authentication
+
+This application implements JWT-based authentication for both REST API and WebSocket connections.
+
+### REST API Authentication
+
+1. **Login Endpoint**
+   - `POST /auth/login` - Authenticate and receive a JWT token
+   - Request body: `{ "username": "admin", "password": "password" }`
+   - Response: `{ "access_token": "jwt-token", "user": { "id": "1", "username": "admin", "roles": ["admin"] } }`
+
+2. **Protected Endpoints**
+   - All endpoints under `/attendance` are protected and require authentication
+   - Include the JWT token in the Authorization header: `Authorization: Bearer your-jwt-token`
+
+### WebSocket Authentication
+
+1. **Connection Authentication**
+   - WebSocket connections require authentication via the JWT token
+   - Include the token in the `auth` object when connecting: `{ auth: { token: 'your-jwt-token' } }`
+   - Alternatively, include it in the Authorization header
+
+2. **Protected Events**
+   - All WebSocket events are protected and require authentication
+   - The server validates the token for each event
 
 ## Caching Implementation
 
@@ -104,6 +162,9 @@ The application implements comprehensive error handling for cache operations:
 
 ### API Endpoints
 
+#### Authentication
+- `POST /auth/login` - Authenticate and receive a JWT token
+
 #### Attendance Management
 - `GET /attendance/data?key={cacheKey}` - Get cached data by key
 - `GET /attendance/student?classId={classId}&studentId={studentId}` - Get attendance data for a student
@@ -116,8 +177,11 @@ The application implements comprehensive error handling for cache operations:
 ### WebSocket Events
 
 - `markAttendance` - Mark attendance in real-time
+  - Payload: `{ classId: string, studentId: string, status: string, ttl?: number }`
 - `subscribeToClass` - Subscribe to attendance updates for a class
+  - Payload: `{ classId: string }`
 - `attendanceUpdate` - Receive attendance updates
+  - Payload: `{ studentId: string, status: string }`
 
 ### Redis Cache Structure
 
@@ -127,13 +191,21 @@ The application implements comprehensive error handling for cache operations:
 
 ### Configuration
 
-The Redis cache is configured using environment variables:
+The application is configured using environment variables:
 
 ```env
+# Server Configuration
+PORT=3000             # Server port
+NODE_ENV=development  # Environment (development, production)
+
 # Redis Configuration
 REDIS_HOST=localhost  # Redis server hostname
 REDIS_PORT=6379       # Redis server port
 REDIS_TTL=3600        # Default TTL in seconds (1 hour)
+
+# JWT Configuration
+JWT_SECRET=your-secret-key  # Secret key for JWT signing
+JWT_EXPIRES_IN=1h           # JWT expiration time
 ```
 
 You can override these settings by creating a `.env` file in the project root or by setting environment variables directly.
@@ -156,6 +228,23 @@ $ npm run test
 
 # Run specific tests for error handling
 $ npm run test -- attendance.service
+```
+
+## Project Structure
+
+```
+├── src/                    # Source code
+│   ├── attendance/         # Attendance module
+│   ├── auth/               # Authentication module
+│   ├── config/             # Configuration module
+│   ├── dtos/               # Data Transfer Objects
+│   ├── exceptions/         # Custom exceptions
+│   ├── app.module.ts       # Main application module
+│   └── main.ts             # Application entry point
+├── test/                   # End-to-end tests
+├── test-rest-api.js        # REST API test client
+├── test-ws-client.js       # WebSocket test client
+└── logs/                   # Application logs
 ```
 
 ## Deployment
